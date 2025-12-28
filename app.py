@@ -47,10 +47,17 @@ def fraude():
 
 @app.route('/fraude/upload', methods=['POST'])
 def fraude_upload():
+
+    # Vérification fichier
     if 'file' not in request.files:
         return "Aucun fichier trouvé"
+
     file = request.files['file']
-    filename = file.filename
+    filename = secure_filename(file.filename)
+
+    UPLOAD_FOLDER = os.path.join('uploads')
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
 
@@ -58,47 +65,74 @@ def fraude_upload():
     df = pd.read_csv(filepath)
     df_clean = clean_data(df)
 
-    # Nombre de transactions analysées
     nb_transactions = len(df_clean)
 
-    # Exploration Phase 1
+    # Analyse exploratoire (facultatif mais OK)
     ratio, pie_path, hist_path = analyse_classes(df_clean)
 
-    # Préparer les données pour ML
-    from sklearn.model_selection import train_test_split
-    X = df_clean.drop(columns=['is_fraud'])
-    y = df_clean['is_fraud']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Préparer features (PAS DE TARGET ICI)
+    X = df_clean.drop(columns=['is_fraud'], errors='ignore')
 
-    # Entraînement SMOTE
-    model = train_smote(X_train, y_train)
-    y_prob = model.predict_proba(X_test)[:,1]
-    best_thresh = threshold_tuning(y_test, y_prob)
-    top_features = explain("models/smote.pkl", X_test)
+    # Respect des exclusions
+    EXCLUDE_COLS = [
+        "score_risque_marchand",
+        "nb_tentatives_echouees",
+        "montant_total_24h",
+        "nb_trans_24h"
+    ]
+    X = X.drop(columns=[c for c in EXCLUDE_COLS if c in X.columns])
 
-    # Ajouter un mini tableau de prédictions
-    df_predictions = X_test.copy()
-    df_predictions['is_fraud_pred'] = (y_prob >= best_thresh).astype(int)
-    df_predictions = df_predictions.head(10)  # par ex., 10 premières lignes
-    
-    # Sauvegarder dataset nettoyé pour téléchargement
+    # Charger modèle + seuil (OFFLINE)
+    model = joblib.load("models/smote.pkl")
+    with open("models/best_threshold.json") as f:
+        best_thresh = json.load(f)["threshold"]
+
+    y_prob = model.predict_proba(X)[:, 1]
+    y_pred = (y_prob >= best_thresh).astype(int)
+
+    df_results = X.copy()
+    df_results["fraud_probability"] = y_prob
+    df_results["is_fraud_pred"] = y_pred
+
+    fraud_cases = df_results[df_results["is_fraud_pred"] == 1]
+
+    top_features = []
+    if not fraud_cases.empty:
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(fraud_cases.drop(
+            columns=["fraud_probability", "is_fraud_pred"]
+        ))
+
+        shap.summary_plot(
+            shap_values[1],
+            fraud_cases.drop(columns=["fraud_probability", "is_fraud_pred"]),
+            show=False
+        )
+
+        os.makedirs("static/plots", exist_ok=True)
+        plt.savefig("static/plots/shap_summary.png")
+        plt.close()
+
+        top_features = fraud_cases.columns[:5].tolist()
+
     DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
     os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
-    result_file = f"cleaned_{filename}"
-    df_clean.to_csv(os.path.join(DOWNLOAD_FOLDER, result_file), index=False)
 
+    result_file = f"results_{filename}"
+    df_results.to_csv(os.path.join(DOWNLOAD_FOLDER, result_file), index=False)
 
     return render_template(
         "fraude.html",
-        nb_transactions=nb_transactions,               # nombre réel de transactions
-        table_results=df_predictions.to_html(classes='table table-striped'),
+        nb_transactions=nb_transactions,
+        nb_fraudes_detectees=int(df_results["is_fraud_pred"].sum()),
+        table_results=df_results.head(10).to_html(classes='table table-striped'),
         pie_path=url_for('static', filename='plots/class_distribution.png'),
         hist_path=url_for('static', filename='plots/class_histogram.png'),
+        shap_path=url_for('static', filename='plots/shap_summary.png'),
         best_thresh=best_thresh,
         top_features=top_features,
         result_file=result_file
     )
-
         
 @app.route("/fraude/predict_ui")
 def fraude_predict_ui():
