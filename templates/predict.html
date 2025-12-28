@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Estimation Express Paris</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">ML Immo Paris</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Exploration</a>
+                <a class="nav-link" href="/predict_ui">Prédiction Express</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <h2 class="text-center mb-4">Estimer mon bien à Paris</h2>
+                        
+                        {% if prediction %}
+                        <div class="alert alert-success text-center py-4">
+                            <h4>Estimation de votre bien :</h4>
+                            <span class="display-4 fw-bold">{{ prediction }} €</span>
+                        </div>
+                        {% endif %}
+
+                        <form action="/get_prediction" method="post" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Surface (m²)</label>
+                                <input type="number" step="0.1" name="surface" class="form-control" value="{{ inputs.get('surface', 50) }}" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Quartier</label>
+                                <select name="quartier" class="form-select">
+                                    <option value="Marais" {{ 'selected' if inputs.get('quartier') == 'Marais' }}>Le Marais</option>
+                                    <option value="Montmartre" {{ 'selected' if inputs.get('quartier') == 'Montmartre' }}>Montmartre</option>
+                                    <option value="Belleville" {{ 'selected' if inputs.get('quartier') == 'Belleville' }}>Belleville</option>
+                                    <option value="Autre" {{ 'selected' if inputs.get('quartier') == 'Autre' or not inputs.get('quartier') }}>Autres</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Nombre de pièces</label>
+                                <input type="number" name="pieces" class="form-control" value="{{ inputs.get('pieces', 2) }}" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Chambres</label>
+                                <input type="number" name="chambres" class="form-control" value="{{ inputs.get('chambres', 1) }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Étage</label>
+                                <input type="number" name="etage" class="form-control" value="{{ inputs.get('etage', 2) }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">État du bien</label>
+                                <select name="etat" class="form-select">
+                                    <option value="Neuf" {{ 'selected' if inputs.get('etat') == 'Neuf' }}>Neuf / Refait à neuf</option>
+                                    <option value="Correct" {{ 'selected' if inputs.get('etat') == 'Correct' }}>Correct</option>
+                                    <option value="Renover" {{ 'selected' if inputs.get('etat') == 'Renover' }}>À rénover</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Type de bien</label>
+                                <select name="type" class="form-select">
+                                    <option value="Appartement" {{ 'selected' if inputs.get('type') == 'Appartement' }}>Appartement</option>
+                                    <option value="Loft" {{ 'selected' if inputs.get('type') == 'Loft' }}>Loft / Atelier</option>
+                                    <option value="Maison" {{ 'selected' if inputs.get('type') == 'Maison' }}>Maison / Hôtel particulier</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Distance Centre (km)</label>
+                                <input type="number" step="0.1" name="dist_centre" class="form-control" value="{{ inputs.get('dist_centre', 2.5) }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Distance Métro (m)</label>
+                                <input type="number" name="dist_trans" class="form-control" value="{{ inputs.get('dist_trans', 300) }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Année Construction</label>
+                                <input type="number" name="annee" class="form-control" value="{{ inputs.get('annee', 1950) }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Score Commerces (1-10)</label>
+                                <input type="number" name="commerces" class="form-control" value="{{ inputs.get('commerces', 7) }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Classe Énergie</label>
+                                <select name="energie" class="form-select">
+                                    <option value="A" {{ 'selected' if inputs.get('energie') == 'A' }}>A</option>
+                                    <option value="B" {{ 'selected' if inputs.get('energie') == 'B' }}>B</option>
+                                    <option value="D" {{ 'selected' if inputs.get('energie') == 'D' }}>D</option>
+                                    <option value="E" {{ 'selected' if inputs.get('energie') == 'E' }}>E</option>
+                                    <option value="G" {{ 'selected' if inputs.get('energie') == 'G' }}>G</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Ascenseur</label>
+                                <select name="ascenseur" class="form-select">
+                                    <option value="1" {{ 'selected' if inputs.get('ascenseur') == '1' }}>Oui</option>
+                                    <option value="0" {{ 'selected' if inputs.get('ascenseur') == '0' }}>Non</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Parking</label>
+                                <select name="parking" class="form-select">
+                                    <option value="1" {{ 'selected' if inputs.get('parking') == '1' }}>Oui</option>
+                                    <option value="0" {{ 'selected' if inputs.get('parking') == '0' }}>Non</option>
+                                </select>
+                            </div>
+
+                            <hr>
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Calculer l'estimation</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
