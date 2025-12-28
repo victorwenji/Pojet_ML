@@ -47,6 +47,10 @@ def fraude():
 
 @app.route('/fraude/upload', methods=['POST'])
 def fraude_upload():
+    import json
+    import joblib
+    import shap
+    import matplotlib.pyplot as plt
 
     # Vérification fichier
     if 'file' not in request.files:
