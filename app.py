@@ -1,8 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for
 import os
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 import pandas as pd
 import joblib
-from flask import send_file
+from flask import send_file, send_from_directory
 from feature_selection import selection_features
 from modeling import entrainer_et_comparer_cv
 from optimization import optimiser_modele
@@ -10,6 +12,12 @@ from sklearn.model_selection import train_test_split
 from werkzeug.utils import secure_filename
 from exploration import analyser_donnees
 from preprocessing import feature_engineering
+from fraude.preprocessing import clean_data          
+from fraude.smote_model import train_smote           
+from fraude.threshold_tuning import threshold_tuning 
+from fraude.shap_explain import explain             
+from fraude.exploration import analyse_classes       
+
 
 app = Flask(__name__)
 
@@ -32,6 +40,95 @@ def index():
 @app.route('/immo')
 def immo():
     return render_template('immo.html')
+
+@app.route("/fraude")
+def fraude():
+    return render_template("fraude.html")
+
+@app.route('/fraude/upload', methods=['POST'])
+def fraude_upload():
+    if 'file' not in request.files:
+        return "Aucun fichier trouvé"
+    file = request.files['file']
+    filename = file.filename
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+
+    # Lecture & nettoyage
+    df = pd.read_csv(filepath)
+    df_clean = clean_data(df)
+
+    # Nombre de transactions analysées
+    nb_transactions = len(df_clean)
+
+    # Exploration Phase 1
+    ratio, pie_path, hist_path = analyse_classes(df_clean)
+
+    # Préparer les données pour ML
+    from sklearn.model_selection import train_test_split
+    X = df_clean.drop(columns=['is_fraud'])
+    y = df_clean['is_fraud']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Entraînement SMOTE
+    model = train_smote(X_train, y_train)
+    y_prob = model.predict_proba(X_test)[:,1]
+    best_thresh = threshold_tuning(y_test, y_prob)
+    top_features = explain("models/smote.pkl", X_test)
+
+    # Ajouter un mini tableau de prédictions
+    df_predictions = X_test.copy()
+    df_predictions['is_fraud_pred'] = (y_prob >= best_thresh).astype(int)
+    df_predictions = df_predictions.head(10)  # par ex., 10 premières lignes
+    
+    # Sauvegarder dataset nettoyé pour téléchargement
+    DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
+    os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+    result_file = f"cleaned_{filename}"
+    df_clean.to_csv(os.path.join(DOWNLOAD_FOLDER, result_file), index=False)
+
+
+    return render_template(
+        "fraude.html",
+        nb_transactions=nb_transactions,               # nombre réel de transactions
+        table_results=df_predictions.to_html(classes='table table-striped'),
+        pie_path=url_for('static', filename='plots/class_distribution.png'),
+        hist_path=url_for('static', filename='plots/class_histogram.png'),
+        best_thresh=best_thresh,
+        top_features=top_features,
+        result_file=result_file
+    )
+
+        
+@app.route("/fraude/predict_ui")
+def fraude_predict_ui():
+    return render_template("fraude_predict.html")
+
+@app.route("/fraude/get_prediction", methods=["POST"])
+def fraude_get_prediction():
+    # Exemple simplifié : récupérer les inputs
+    montant = float(request.form.get("montant"))
+    type_tx = request.form.get("type_tx")
+    origine = request.form.get("origine")
+    destination = request.form.get("destination")
+    heure = request.form.get("heure")
+
+    # Ici tu charges ton modèle de fraude bancaire
+    model_fraude = joblib.load("models/modele_fraude_final.joblib")
+
+    # Construction d'un DataFrame pour la prédiction
+    X_input = pd.DataFrame([{
+        "montant": montant,
+        "type_tx": type_tx,
+        "origine": origine,
+        "destination": destination,
+        "heure": heure
+    }])
+
+    # TODO : encoder les catégorielles / appliquer scaler si nécessaire
+    prediction = model_fraude.predict(X_input)[0]
+
+    return render_template("fraude_predict.html", prediction="Fraude" if prediction==1 else "Non frauduleuse")      
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -237,8 +334,8 @@ def get_prediction():
 
 @app.route('/download/<filename>')
 def download_cleaned_data(filename):
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    return send_file(file_path, as_attachment=True)
+    DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
+    return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
