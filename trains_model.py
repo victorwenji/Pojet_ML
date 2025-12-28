@@ -1,12 +1,13 @@
-# train_models.py
 import os
 import pandas as pd
 import joblib
+import json
 from sklearn.model_selection import train_test_split
 from fraude.preprocessing import clean_data
 from fraude.baseline import train_baseline_model, evaluate_model
 from fraude.class_weight import train_rf_class_weight, train_gb_class_weight
 from fraude.smote_model import train_smote, evaluate_model as eval_smote
+from fraude.threshold_tuning import threshold_tuning
 
 # Chemins
 DATA_PATH = "data/raw/transactions.csv"
@@ -46,5 +47,14 @@ smote_model = train_smote(X_train, y_train)
 joblib.dump(smote_model, os.path.join(MODELS_DIR, "smote.pkl"))
 smote_metrics = eval_smote(smote_model, X_test, y_test)
 print("SMOTE:", smote_metrics)
+
+# 7. Calcul et sauvegarde du meilleur seuil (threshold tuning)
+y_prob = smote_model.predict_proba(X_test)[:, 1]
+best_thresh, precisions, recalls, f1_scores, thresholds = threshold_tuning(y_test, y_prob)
+
+# Sauvegarder le meilleur seuil
+with open(os.path.join(MODELS_DIR, "best_threshold.json"), "w") as f:
+    json.dump({"best_threshold": float(best_thresh)}, f)
+print(f"Best threshold sauvegardé: {best_thresh}")
 
 print("Tous les modèles ont été entraînés et sauvegardés dans le dossier 'models/'")
