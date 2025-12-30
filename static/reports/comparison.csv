@@ -1,0 +1,4 @@
+strategie,precision,recall,f1,roc_auc
+Baseline,1.0,0.9803921568627451,0.9900990099009901,0.9999500054993951
+Class Weight,1.0,1.0,1.0,1.0
+SMOTE,1.0,1.0,1.0,1.0

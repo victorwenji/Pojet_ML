@@ -5,6 +5,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 import pandas as pd
 import joblib
 from flask import send_file, send_from_directory
+from datetime import datetime
 from feature_selection import selection_features
 from modeling import entrainer_et_comparer_cv
 from optimization import optimiser_modele
@@ -16,7 +17,11 @@ from fraude.preprocessing import clean_data
 from fraude.smote_model import train_smote           
 from fraude.threshold_tuning import threshold_tuning 
 from fraude.shap_explain import explain             
-from fraude.exploration import analyse_classes       
+from fraude.exploration import analyse_classes    
+from fraude.comparison import compare_all_strategies
+from fraude.cost_benefit import analyze_cost_benefit
+from fraude.report_generator import generate_pdf_report
+from fraude.fraud_reports import generate_fraud_reports   
 
 
 app = Flask(__name__)
@@ -32,6 +37,10 @@ def safe_float(value, default=0.0):
     
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join('static', 'plots'), exist_ok=True)
+
+@app.template_filter('datetime')
+def format_datetime(value, format='%d/%m/%Y à %H:%M'):
+    return datetime.now().strftime(format)
 
 @app.route('/')
 def index():
@@ -51,92 +60,303 @@ def fraude_upload():
     import joblib
     import shap
     import matplotlib.pyplot as plt
+    from sklearn.model_selection import train_test_split
 
-    # Vérification fichier
-    if 'file' not in request.files:
-        return "Aucun fichier trouvé"
+    try:
+        # Vérification fichier
+        if 'file' not in request.files:
+            return render_template('fraude.html', error="Aucun fichier trouvé")
 
-    file = request.files['file']
-    filename = secure_filename(file.filename)
+        file = request.files['file']
+        if file.filename == '':
+            return render_template('fraude.html', error="Aucun fichier sélectionné")
+        
+        filename = secure_filename(file.filename)
 
-    UPLOAD_FOLDER = os.path.join('uploads')
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        UPLOAD_FOLDER = os.path.join('uploads')
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
 
-    # Lecture & nettoyage
-    df = pd.read_csv(filepath)
-    df_clean = clean_data(df)
+        # ============================================================================
+        # PHASE 1: Chargement et nettoyage des données
+        # ============================================================================
+        print("\n📂 Chargement des données...")
+        df = pd.read_csv(filepath)
+        
+        if df.empty:
+            return render_template('fraude.html', error="Le fichier CSV est vide")
+        
+        if 'is_fraud' not in df.columns:
+            return render_template('fraude.html', error="La colonne 'is_fraud' est manquante")
+        
+        df_clean = clean_data(df)
+        nb_transactions = len(df_clean)
+        
+        # Analyse exploratoire
+        ratio, pie_path, hist_path = analyse_classes(df_clean)
+        
+        print(f"✅ {nb_transactions} transactions chargées")
+        print(f"📊 Ratio fraude: {ratio:.2%}")
 
-    nb_transactions = len(df_clean)
-
-    # Analyse exploratoire (facultatif mais OK)
-    ratio, pie_path, hist_path = analyse_classes(df_clean)
-
-    # Préparer features (PAS DE TARGET ICI)
-    X = df_clean.drop(columns=['is_fraud'], errors='ignore')
-
-    # Respect des exclusions
-    EXCLUDE_COLS = [
-        "score_risque_marchand",
-        "nb_tentatives_echouees",
-        "montant_total_24h",
-        "nb_trans_24h"
-    ]
-    X = X.drop(columns=[c for c in EXCLUDE_COLS if c in X.columns])
-
-    # Charger modèle + seuil (OFFLINE)
-    model = joblib.load("models/smote.pkl")
-    with open("models/best_threshold.json") as f:
-        best_thresh = json.load(f)["threshold"]
-
-    y_prob = model.predict_proba(X)[:, 1]
-    y_pred = (y_prob >= best_thresh).astype(int)
-
-    df_results = X.copy()
-    df_results["fraud_probability"] = y_prob
-    df_results["is_fraud_pred"] = y_pred
-
-    fraud_cases = df_results[df_results["is_fraud_pred"] == 1]
-
-    top_features = []
-    if not fraud_cases.empty:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(fraud_cases.drop(
-            columns=["fraud_probability", "is_fraud_pred"]
-        ))
-
-        shap.summary_plot(
-            shap_values[1],
-            fraud_cases.drop(columns=["fraud_probability", "is_fraud_pred"]),
-            show=False
+        # ============================================================================
+        # PHASE 2: Préparation des données
+        # ============================================================================
+        print("\n🔧 Préparation des features...")
+        
+        # Séparer X et y
+        X = df_clean.drop(columns=['is_fraud'])
+        y = df_clean['is_fraud']
+        
+        # Exclusion des colonnes sensibles
+        EXCLUDE_COLS = [
+            "score_risque_marchand",
+            "nb_tentatives_echouees",
+            "montant_total_24h",
+            "nb_trans_24h"
+        ]
+        X = X.drop(columns=[c for c in EXCLUDE_COLS if c in X.columns])
+        
+        # Vérifier qu'il reste des features
+        if X.shape[1] == 0:
+            return render_template('fraude.html', error="Aucune feature disponible après nettoyage")
+        
+        # Split train/test avec vérification
+        if len(X) < 10:
+            return render_template('fraude.html', error="Pas assez de données (minimum 10 transactions)")
+        
+        # Vérifier qu'il y a au moins quelques fraudes
+        fraud_count = y.sum()
+        if fraud_count < 2:
+            return render_template('fraude.html', 
+                                 error=f"Pas assez de fraudes ({fraud_count}). Minimum 2 requises pour l'entraînement.")
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
         )
+        
+        print(f"✅ Train: {len(X_train)}, Test: {len(X_test)}")
 
-        os.makedirs("static/plots", exist_ok=True)
-        plt.savefig("static/plots/shap_summary.png")
-        plt.close()
+        # ============================================================================
+        # PHASE 3: Comparaison des 3 stratégies
+        # ============================================================================
+        print("\n🔬 Comparaison Baseline vs Class Weight vs SMOTE...")
+        
+        try:
+            comparison_df = compare_all_strategies(X_train, X_test, y_train, y_test)
+            print("\n📊 Résultats de comparaison:")
+            print(comparison_df)
+            
+            best_strategy_name = comparison_df.loc[comparison_df['f1'].idxmax(), 'strategie']
+            print(f"\n🏆 Meilleure stratégie: {best_strategy_name}")
+        except Exception as e:
+            print(f"⚠️ Erreur lors de la comparaison: {e}")
+            return render_template('fraude.html', 
+                                 error=f"Erreur comparaison stratégies: {str(e)}")
 
-        top_features = fraud_cases.columns[:5].tolist()
+        # ============================================================================
+        # PHASE 4: Optimisation du seuil sur le meilleur modèle
+        # ============================================================================
+        print("\n⚙️ Optimisation du seuil de décision...")
+        
+        try:
+            # Charger le meilleur modèle
+            best_model = joblib.load("models/smote.pkl")
+            
+            # Aligner features
+            X_test_aligned = X_test.copy()
+            if hasattr(best_model, 'feature_names_in_'):
+                for col in best_model.feature_names_in_:
+                    if col not in X_test_aligned.columns:
+                        X_test_aligned[col] = 0
+                X_test_aligned = X_test_aligned[best_model.feature_names_in_]
+            
+            y_prob = best_model.predict_proba(X_test_aligned)[:, 1]
+            
+            from fraude.threshold_tuning import threshold_tuning
+            best_thresh, precisions, recalls, f1_scores, thresholds = threshold_tuning(
+                y_test, y_prob, save_path="static/plots/f1_vs_threshold.png"
+            )
+            
+            print(f"✅ Seuil optimal: {best_thresh:.3f}")
+            
+            # Sauvegarder le seuil
+            with open("models/best_threshold.json", "w") as f:
+                json.dump({"threshold": float(best_thresh)}, f)
+                
+        except Exception as e:
+            print(f"⚠️ Erreur optimisation seuil: {e}")
+            best_thresh = 0.5  # Valeur par défaut
 
-    DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
-    os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+        # ============================================================================
+        # PHASE 5: Analyse Coût-Bénéfice
+        # ============================================================================
+        print("\n💰 Analyse coût-bénéfice...")
+        
+        try:
+            y_pred = (y_prob >= best_thresh).astype(int)
+            
+            cost_benefit_results = analyze_cost_benefit(
+                y_test, y_pred, y_prob, 
+                threshold=best_thresh,
+                cost_fp=50,
+                cost_fn=500,
+                benefit_tp=500
+            )
+            
+            print(f"✅ Bénéfice net: {cost_benefit_results['costs']['net_benefit']:,.2f}€")
+        except Exception as e:
+            print(f"⚠️ Erreur analyse coût-bénéfice: {e}")
+            # Valeurs par défaut
+            cost_benefit_results = {
+                'confusion_matrix': {'TP': 0, 'FP': 0, 'TN': 0, 'FN': 0},
+                'costs': {
+                    'cost_fp_total': 0.0,
+                    'cost_fn_total': 0.0,
+                    'benefit_tp_total': 0.0,
+                    'net_benefit': 0.0
+                }
+            }
 
-    result_file = f"results_{filename}"
-    df_results.to_csv(os.path.join(DOWNLOAD_FOLDER, result_file), index=False)
+        # ============================================================================
+        # PHASE 6: Analyse SHAP
+        # ============================================================================
+        print("\n🔍 Analyse SHAP (explainabilité)...")
+        
+        try:
+            from fraude.shap_explain import explain
+            top_features = explain("models/smote.pkl", X_test)
+            print(f"✅ Top features: {top_features[:5]}")
+        except Exception as e:
+            print(f"⚠️ Erreur SHAP: {e}")
+            top_features = X_test.columns.tolist()[:10]
 
-    return render_template(
-        "fraude.html",
-        nb_transactions=nb_transactions,
-        nb_fraudes_detectees=int(df_results["is_fraud_pred"].sum()),
-        table_results=df_results.head(10).to_html(classes='table table-striped'),
-        pie_path=url_for('static', filename='plots/class_distribution.png'),
-        hist_path=url_for('static', filename='plots/class_histogram.png'),
-        shap_path=url_for('static', filename='plots/shap_summary.png'),
-        best_thresh=best_thresh,
-        top_features=top_features,
-        result_file=result_file
-    )
+        # ============================================================================
+        # PHASE 7: Génération du rapport de fraudes
+        # ============================================================================
+        print("\n📋 Génération du rapport de fraudes...")
+        
+        try:
+            fraud_report_df = generate_fraud_reports(
+                "models/smote.pkl", X_test, y_test, y_prob, best_thresh, top_n=10
+            )
+            print(f"✅ {len(fraud_report_df)} cas de fraude documentés")
+        except Exception as e:
+            print(f"⚠️ Erreur génération rapport fraudes: {e}")
+            import traceback
+            traceback.print_exc()
+            fraud_report_df = pd.DataFrame()
+
+        # ============================================================================
+        # PHASE 8: Génération du rapport PDF
+        # ============================================================================
+        print("\n📄 Génération du rapport PDF...")
+        
+        try:
+            generate_pdf_report(
+                comparison_df, 
+                cost_benefit_results, 
+                best_thresh,
+                output_path="static/reports/rapport_fraude.pdf"
+            )
+            print("✅ Rapport PDF généré!")
+        except Exception as e:
+            print(f"⚠️ Erreur génération PDF: {e}")
+            # Continuer sans PDF
+
+        # ============================================================================
+        # PHASE 9: Prédictions sur les nouvelles données
+        # ============================================================================
+        print("\n🎯 Prédictions sur les données uploadées...")
+        
+        # Aligner features pour prédiction
+        X_full_aligned = X.copy()
+        if hasattr(best_model, 'feature_names_in_'):
+            for col in best_model.feature_names_in_:
+                if col not in X_full_aligned.columns:
+                    X_full_aligned[col] = 0
+            X_full_aligned = X_full_aligned[best_model.feature_names_in_]
+        
+        y_prob_full = best_model.predict_proba(X_full_aligned)[:, 1]
+        y_pred_full = (y_prob_full >= best_thresh).astype(int)
+        
+        df_results = X.copy()
+        df_results["fraud_probability"] = y_prob_full
+        df_results["is_fraud_pred"] = y_pred_full
+        df_results["score_risque"] = (y_prob_full * 100).round(2)
+        
+        # Statistiques
+        nb_fraudes_detectees = int(df_results["is_fraud_pred"].sum())
+        taux_fraude = (nb_fraudes_detectees / nb_transactions * 100) if nb_transactions > 0 else 0
+        
+        print(f"✅ {nb_fraudes_detectees} fraudes détectées ({taux_fraude:.2f}%)")
+
+        # ============================================================================
+        # PHASE 10: Sauvegarde des résultats
+        # ============================================================================
+        DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
+        os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+        result_file = f"results_{filename}"
+        df_results.to_csv(os.path.join(DOWNLOAD_FOLDER, result_file), index=False)
+        
+        print(f"✅ Résultats sauvegardés: {result_file}")
+        print("\n" + "="*60)
+        print("✅ PIPELINE TERMINÉ AVEC SUCCÈS")
+        print("="*60)
+
+        # ============================================================================
+        # RENDU DU TEMPLATE
+        # ============================================================================
+        return render_template(
+            "fraude_results.html",
+            # Statistiques générales
+            nb_transactions=nb_transactions,
+            nb_fraudes_detectees=nb_fraudes_detectees,
+            taux_fraude=f"{taux_fraude:.2f}",
+            
+            # Comparaison des stratégies
+            comparison_table=comparison_df.to_html(classes='table table-striped', index=False),
+            best_strategy=best_strategy_name,
+            
+            # Optimisation du seuil
+            best_thresh=f"{best_thresh:.3f}",
+            
+            # Coût-bénéfice
+            cost_benefit=cost_benefit_results,
+            
+            # Graphiques
+            pie_path=url_for('static', filename='plots/class_distribution.png'),
+            hist_path=url_for('static', filename='plots/class_histogram.png'),
+            comparison_chart=url_for('static', filename='plots/strategie_comparaison.png'),
+            radar_chart=url_for('static', filename='plots/strategie_radar.png'),
+            threshold_chart=url_for('static', filename='plots/f1_vs_threshold.png'),
+            cost_benefit_chart=url_for('static', filename='plots/cost_benefit_analysis.png'),
+            confusion_matrix_chart=url_for('static', filename='plots/confusion_matrix_cost.png'),
+            shap_summary=url_for('static', filename='plots/shap_summary.png'),
+            shap_bar=url_for('static', filename='plots/shap_bar.png'),
+            shap_beeswarm=url_for('static', filename='plots/shap_beeswarm.png'),
+            
+            # Rapports téléchargeables
+            result_file=result_file,
+            pdf_report="reports/rapport_fraude.pdf",
+            fraud_csv="reports/fraud_reports.csv",
+            comparison_csv="reports/comparison.csv",
+            
+            # Tableau des résultats
+            table_results=df_results.head(20).to_html(classes='table table-striped table-sm', index=False),
+            
+            # Top features
+            top_features=top_features[:10]
+        )
+        
+    except Exception as e:
+        print(f"\n❌ ERREUR CRITIQUE: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('fraude.html', 
+                             error=f"Erreur lors du traitement: {str(e)}")
         
 @app.route("/fraude/predict_ui")
 def fraude_predict_ui():
