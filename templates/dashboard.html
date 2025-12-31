@@ -1,146 +1,247 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Analyse des données</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-</head>
-<body class="container mt-5">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="/">ML Immo Paris</a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="/">Exploration</a>
-                <a class="nav-link" href="/predict_ui">Prédiction Express</a>
-            </div>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Analyse Immo Paris - Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <style>
+      .card {
+        border: none;
+        border-radius: 12px;
+        transition: transform 0.2s;
+      }
+      .card:hover {
+        transform: translateY(-5px);
+      }
+      .bg-gradient-primary {
+        background: linear-gradient(45deg, #4e73df, #224abe);
+      }
+      .feature-list {
+        column-count: 2;
+        column-gap: 20px;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="/"
+          ><i class="fas fa-city me-2"></i>ML Immo Paris</a
+        >
+        <div class="navbar-nav">
+          <a class="nav-link" href="/">Exploration</a>
+          <a class="nav-link" href="/predict_ui">Prédiction Express</a>
         </div>
+      </div>
     </nav>
-    <h1 class="mb-4">Analyse Visuelle (Paris)</h1>
-    <div class="alert alert-info">Nombre d'appartements analysés : {{ nb }}</div>
 
-    <div class="row">
-        <div class="col-12 mb-4">
-            <h3>1. Distributions (Histogrammes)</h3>
-            <img src="{{ url_for('static', filename=hist_url) }}" class="img-fluid border shadow rounded w-100">
-        </div>
-        
-        <div class="col-12 mb-4">
-            <h3>2. Détection des Outliers (Boxplots)</h3>
-            <img src="{{ url_for('static', filename=box_url) }}" class="img-fluid border shadow rounded w-100">
-        </div>
-    </div>
-    
-    <div class="row">
-        <div class="col-md-8">
-            <h3>3. Matrice de Corrélation</h3>
-            <img src="{{ url_for('static', filename=corr_url) }}" class="img-fluid border shadow rounded">
-        </div>
-        <div class="col-md-4">
-            <h3>Lien avec le Prix</h3>
-            <p>Plus le score est proche de 1, plus la variable fait monter le prix.</p>
-            {{ corr_table | safe }}
-        </div>
-    </div>
-    <div class="row mt-5">
-        <div class="col-md-6">
-            <div class="card border-warning">
-                <div class="card-header bg-warning">Colonnes avec données manquantes</div>
-                <div class="card-body">
-                    {{ report_missing | safe }}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card border-danger">
-                <div class="card-header bg-danger text-white">Alertes Outliers & Anomalies</div>
-                <div class="card-body">
-                    <ul>
-                        <li>Outliers Prix : <strong>{{ outliers.Prix }}</strong></li>
-                        <li>Outliers Surface : <strong>{{ outliers.Surface }}</strong></li>
-                        <li>Erreurs de distance : <strong>{{ anomalies['Distances négatives'] }}</strong></li>
-                    </ul>
-                </div>
-            </div>
-        </div>  
-    </div>
+    <div class="container pb-5">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">Analyse Visuelle du Marché</h1>
+        <span class="badge bg-primary rounded-pill px-3 py-2 fs-6">
+          <i class="fas fa-database me-2"></i>{{ nb }} appartements analysés
+        </span>
+      </div>
 
-    <div class="row mt-5">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-success text-white">🏆 Comparaison des Modèles</div>
-                <div class="card-body">
-                    {{ models_table | safe }}
-                    <p class="text-muted mt-2 small">* Le score R² idéal est de 1.0</p>
-                </div>
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-white py-3">
+              <h6 class="m-0 fw-bold text-primary">
+                <i class="fas fa-chart-line me-2"></i>Répartition et Tendances
+              </h6>
             </div>
-        </div>
-        
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-dark text-white">📌 Top 15 variables sélectionnées</div>
-                <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        {% for feature in top_features %}
-                        <li class="list-group-item">{{ feature }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
+            <div class="card-body text-center">
+              <img
+                src="{{ url_for('static', filename=hist_url) }}"
+                class="img-fluid rounded w-100"
+              />
             </div>
+          </div>
         </div>
-    </div>
-    <div class="row mt-5 mb-5">
+
+        <div class="col-lg-4">
+          <div class="card shadow-sm border-start border-danger border-4 mb-4">
+            <div class="card-body">
+              <h6 class="fw-bold text-danger mb-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>Santé des
+                données
+              </h6>
+              <div class="d-flex justify-content-between border-bottom py-2">
+                <span>Outliers Prix :</span>
+                <span class="badge bg-danger">{{ outliers.Prix }}</span>
+              </div>
+              <div class="d-flex justify-content-between border-bottom py-2">
+                <span>Outliers Surface :</span>
+                <span class="badge bg-danger">{{ outliers.Surface }}</span>
+              </div>
+              <div class="d-flex justify-content-between py-2">
+                <span>Erreurs Distances :</span>
+                <span class="badge bg-warning text-dark"
+                  >{{ anomalies['Distances négatives'] }}</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white py-2">
+              <h6 class="m-0 small fw-bold">
+                Top 10 : Corrélations avec le Prix
+              </h6>
+            </div>
+            <div class="card-body p-0 table-responsive small">
+              {% if corr_txt %} {{ corr_txt | safe }} {% else %}
+              <p class="p-3 text-muted">
+                Données de corrélation indisponibles.
+              </p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
         <div class="col-12">
-            <div class="card border-primary shadow">
-                <div class="card-header bg-primary text-white">🚀 Phase 5 : Optimisation du Modèle (Fine-Tuning)</div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 text-center">
-                            <h5>Performance R²</h5>
-                            <p class="display-6">{{ opti.score_avant }} ➡️ <strong>{{ opti.score_apres }}</strong></p>
-                            <span class="badge bg-success">Gain : +{{ opti.gain_r2 }}</span>
-                        </div>
-                        <div class="col-md-4 text-center border-start">
-                            <h5>Erreur Moyenne (MAE)</h5>
-                            <p class="display-6">{{ opti.mae_avant }}€ ➡️ <strong>{{ opti.mae_apres }}€</strong></p>
-                            <p class="text-muted small">Temps de calcul : {{ opti.duree }}s</p>
-                        </div>
-                        <div class="col-md-4 border-start">
-                            <h5>Paramètres Optimaux</h5>
-                            <ul class="small">
-                                {% for key, value in opti.best_params.items() %}
-                                <li><code>{{ key }}</code> : {{ value }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    </div>
+          <div class="card shadow-sm">
+            <div class="card-header bg-white py-3">
+              <h6 class="m-0 fw-bold text-warning">
+                <i class="fas fa-expand-arrows-alt me-2"></i>Analyse de
+                Dispersion (Boxplots)
+              </h6>
+            </div>
+            <div class="card-body text-center">
+              <img
+                src="{{ url_for('static', filename=box_url) }}"
+                class="img-fluid w-100"
+                style="max-height: 400px; object-fit: contain"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mt-2">
+        <div class="col-md-7">
+          <div class="card shadow-sm border-0 h-100">
+            <div
+              class="card-header bg-gradient-primary text-white py-3 d-flex justify-content-between"
+            >
+              <h6 class="m-0 fw-bold">Performance du Modèle Optimisé</h6>
+              <span class="small">Temps : {{ opti.duree }}s</span>
+            </div>
+            <div class="card-body">
+              <div class="row text-center mb-3">
+                <div class="col-6 border-end">
+                  <small class="text-muted">Score R² Final</small>
+                  <h2 class="fw-bold text-success">{{ opti.score_apres }}</h2>
                 </div>
+                <div class="col-6">
+                  <small class="text-muted">Erreur MAE</small>
+                  <h2 class="fw-bold text-primary">{{ opti.mae_apres }}€</h2>
+                </div>
+              </div>
+              <div
+                class="p-3 bg-light rounded border-start border-primary border-4"
+              >
+                <h6 class="fw-bold mb-3 small text-primary text-uppercase">
+                  <i class="fas fa-lightbulb me-2"></i>Facteurs Clés (Top 5)
+                </h6>
+                <div class="d-flex flex-wrap gap-2">
+                  {% if top_features %} {% for feature in top_features[:5] %}
+                  <span
+                    class="badge bg-white text-dark border p-2 fw-normal shadow-sm"
+                  >
+                    <i class="fas fa-star text-warning me-1"></i> {{ feature }}
+                  </span>
+                  {% endfor %} {% else %}
+                  <span class="text-muted small"
+                    >Chargement des variables...</span
+                  >
+                  {% endif %}
+                </div>
+              </div>
             </div>
+          </div>
         </div>
+
+        <div class="col-md-5">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white py-3">
+              <h6 class="m-0 fw-bold">🏆 Comparaison des modèles</h6>
+            </div>
+            <div class="card-body p-0 table-responsive">
+              {{ models_table | safe }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion mt-5 shadow-sm" id="techAccordion">
+        <div class="accordion-item border-0">
+          <h2 class="accordion-header">
+            <button
+              class="accordion-button collapsed bg-white fw-bold"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapseOne"
+            >
+              <i class="fas fa-cog me-2"></i> Détails techniques et paramètres
+            </button>
+          </h2>
+          <div
+            id="collapseOne"
+            class="accordion-collapse collapse"
+            data-bs-parent="#techAccordion"
+          >
+            <div class="accordion-body bg-white">
+              <div class="row">
+                <div class="col-md-8">
+                  <h6 class="fw-bold">Résumé Statistique</h6>
+                  <div class="table-responsive small">{{ stats | safe }}</div>
+                </div>
+                <div class="col-md-4 border-start">
+                  <h6 class="fw-bold">Paramètres Optimaux</h6>
+                  <ul class="list-unstyled small">
+                    {% for key, value in opti.best_params.items() %}
+                    <li><code>{{ key }}</code> : {{ value }}</li>
+                    {% endfor %}
+                  </ul>
+                  <h6 class="fw-bold mt-3">Données Manquantes</h6>
+                  {{ report_missing | safe }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 text-center p-5 bg-white rounded shadow-sm border">
+        <h3>📥 Prêt pour l'exportation ?</h3>
+        <p class="text-muted">
+          Téléchargez le dataset nettoyé avec les colonnes optimisées.
+        </p>
+        <a
+          href="{{ url_for('download_cleaned_data', filename=cleaned_file) }}"
+          class="btn btn-success btn-lg px-5 shadow"
+        >
+          <i class="fas fa-file-download me-2"></i>Télécharger (.csv)
+        </a>
+        <div class="mt-4">
+          <a href="/" class="btn btn-link text-decoration-none text-muted"
+            >Charger un nouveau fichier</a
+          >
+        </div>
+      </div>
     </div>
 
-    <div class="row mt-5 mb-5">
-        <div class="col-12 text-center">
-            <div class="p-5 bg-light border rounded shadow-sm">
-                <h3>📥 Exportation des données</h3>
-                <p class="text-muted">Téléchargez le dataset après nettoyage, imputation des valeurs manquantes et feature engineering.</p>
-                
-                <a href="{{ url_for('download_cleaned_data', filename=cleaned_file) }}" 
-                class="btn btn-success btn-lg">
-                <i class="fas fa-download"></i> Télécharger les données propres (.csv)
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mt-4">
-        <div class="col-12">
-            <h3>3. Résumé Statistique</h3>
-            <div class="table-responsive">
-                {{ stats | safe }}
-            </div>
-        </div>
-    </div>
-    
-    <a href="/" class="btn btn-primary my-5">Charger un autre fichier</a>
-</body>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
 </html>
