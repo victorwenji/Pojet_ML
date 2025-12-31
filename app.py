@@ -357,38 +357,9 @@ def fraude_upload():
         traceback.print_exc()
         return render_template('fraude.html', 
                              error=f"Erreur lors du traitement: {str(e)}")
-        
-@app.route("/fraude/predict_ui")
-def fraude_predict_ui():
-    return render_template("fraude_predict.html")
-
-@app.route("/fraude/get_prediction", methods=["POST"])
-def fraude_get_prediction():
-    # Exemple simplifié : récupérer les inputs
-    montant = float(request.form.get("montant"))
-    type_tx = request.form.get("type_tx")
-    origine = request.form.get("origine")
-    destination = request.form.get("destination")
-    heure = request.form.get("heure")
-
-    # Ici tu charges ton modèle de fraude bancaire
-    model_fraude = joblib.load("models/modele_fraude_final.joblib")
-
-    # Construction d'un DataFrame pour la prédiction
-    X_input = pd.DataFrame([{
-        "montant": montant,
-        "type_tx": type_tx,
-        "origine": origine,
-        "destination": destination,
-        "heure": heure
-    }])
-
-    # TODO : encoder les catégorielles / appliquer scaler si nécessaire
-    prediction = model_fraude.predict(X_input)[0]
-
-    return render_template("fraude_predict.html", prediction="Fraude" if prediction==1 else "Non frauduleuse")      
-
+    
 @app.route('/upload', methods=['POST'])
+
 def upload_file():
     if 'file' not in request.files:
         return "Aucun fichier trouvé"

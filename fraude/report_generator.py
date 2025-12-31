@@ -5,6 +5,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Tabl
 from reportlab.lib import colors
 from datetime import datetime
 import numpy as np
+import os
 import json
 
 def generate_pdf_report(comparison_df, cost_benefit_results, best_threshold, output_path="static/reports/rapport_fraude.pdf"):
