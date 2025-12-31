@@ -5,10 +5,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def explain(model_path, X_test):
-    """
-    Génère les graphiques SHAP pour le modèle et retourne la liste des features.
-    X_test sera automatiquement aligné avec les colonnes du modèle.
-    """
     # Charger le modèle
     model = joblib.load(model_path)
     
@@ -49,4 +45,4 @@ def explain(model_path, X_test):
     plt.savefig("static/plots/shap_beeswarm.png")
     plt.close()
 
-    return expected_cols  # liste des features
+    return expected_cols  

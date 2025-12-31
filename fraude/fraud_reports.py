@@ -5,9 +5,6 @@ import shap
 import os
 
 def generate_fraud_reports(model_path, X_test, y_test, y_prob, threshold, top_n=10):
-    """
-    Génère un CSV avec les cas de fraude les plus suspects avec scores de risque
-    """
     model = joblib.load(model_path)
     
     # Prédictions
@@ -138,11 +135,6 @@ def generate_fraud_reports(model_path, X_test, y_test, y_prob, threshold, top_n=
 
 
 def align_features(X, model):
-    """
-    Aligne les features avec celles du modèle
-    Gère les cas où le modèle a été entraîné avec des colonnes différentes
-    """
-    # Essayer différentes façons de récupérer les noms de features
     expected_cols = None
     
     if hasattr(model, 'feature_names_'):
@@ -152,7 +144,6 @@ def align_features(X, model):
     elif hasattr(model, 'feature_name_'):
         expected_cols = model.feature_name_
     else:
-        # Si aucune information, retourner X tel quel
         print("⚠️ Impossible de détecter les features du modèle, utilisation des colonnes actuelles")
         return X
     

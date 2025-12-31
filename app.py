@@ -79,9 +79,6 @@ def fraude_upload():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
 
-        # ============================================================================
-        # PHASE 1: Chargement et nettoyage des données
-        # ============================================================================
         print("\n📂 Chargement des données...")
         df = pd.read_csv(filepath)
         
@@ -100,9 +97,6 @@ def fraude_upload():
         print(f"✅ {nb_transactions} transactions chargées")
         print(f"📊 Ratio fraude: {ratio:.2%}")
 
-        # ============================================================================
-        # PHASE 2: Préparation des données
-        # ============================================================================
         print("\n🔧 Préparation des features...")
         
         # Séparer X et y
@@ -138,9 +132,6 @@ def fraude_upload():
         
         print(f"✅ Train: {len(X_train)}, Test: {len(X_test)}")
 
-        # ============================================================================
-        # PHASE 3: Comparaison des 3 stratégies
-        # ============================================================================
         print("\n🔬 Comparaison Baseline vs Class Weight vs SMOTE...")
         
         try:
@@ -154,10 +145,7 @@ def fraude_upload():
             print(f"⚠️ Erreur lors de la comparaison: {e}")
             return render_template('fraude.html', 
                                  error=f"Erreur comparaison stratégies: {str(e)}")
-
-        # ============================================================================
-        # PHASE 4: Optimisation du seuil sur le meilleur modèle
-        # ============================================================================
+            
         print("\n⚙️ Optimisation du seuil de décision...")
         
         try:
@@ -189,9 +177,6 @@ def fraude_upload():
             print(f"⚠️ Erreur optimisation seuil: {e}")
             best_thresh = 0.5  # Valeur par défaut
 
-        # ============================================================================
-        # PHASE 5: Analyse Coût-Bénéfice
-        # ============================================================================
         print("\n💰 Analyse coût-bénéfice...")
         
         try:
@@ -219,9 +204,6 @@ def fraude_upload():
                 }
             }
 
-        # ============================================================================
-        # PHASE 6: Analyse SHAP
-        # ============================================================================
         print("\n🔍 Analyse SHAP (explainabilité)...")
         
         try:
@@ -232,9 +214,6 @@ def fraude_upload():
             print(f"⚠️ Erreur SHAP: {e}")
             top_features = X_test.columns.tolist()[:10]
 
-        # ============================================================================
-        # PHASE 7: Génération du rapport de fraudes
-        # ============================================================================
         print("\n📋 Génération du rapport de fraudes...")
         
         try:
@@ -248,9 +227,6 @@ def fraude_upload():
             traceback.print_exc()
             fraud_report_df = pd.DataFrame()
 
-        # ============================================================================
-        # PHASE 8: Génération du rapport PDF
-        # ============================================================================
         print("\n📄 Génération du rapport PDF...")
         
         try:
@@ -265,9 +241,6 @@ def fraude_upload():
             print(f"⚠️ Erreur génération PDF: {e}")
             # Continuer sans PDF
 
-        # ============================================================================
-        # PHASE 9: Prédictions sur les nouvelles données
-        # ============================================================================
         print("\n🎯 Prédictions sur les données uploadées...")
         
         # Aligner features pour prédiction
@@ -292,9 +265,6 @@ def fraude_upload():
         
         print(f"✅ {nb_fraudes_detectees} fraudes détectées ({taux_fraude:.2f}%)")
 
-        # ============================================================================
-        # PHASE 10: Sauvegarde des résultats
-        # ============================================================================
         DOWNLOAD_FOLDER = os.path.join('static', 'downloads')
         os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
@@ -305,10 +275,7 @@ def fraude_upload():
         print("\n" + "="*60)
         print("✅ PIPELINE TERMINÉ AVEC SUCCÈS")
         print("="*60)
-
-        # ============================================================================
-        # RENDU DU TEMPLATE
-        # ============================================================================
+        
         return render_template(
             "fraude_results.html",
             # Statistiques générales
@@ -360,6 +327,7 @@ def fraude_upload():
     
 @app.route('/upload', methods=['POST'])
 
+@app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return "Aucun fichier trouvé"
@@ -369,44 +337,42 @@ def upload_file():
         return "Aucun fichier sélectionné"
     
     if file:
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
              
-            # 2. Chargement et Feature Engineering
-            df_raw = pd.read_csv(filepath)
-            df_clean, scaler  = feature_engineering(df_raw)
-            
-             # SAUVEGARDE DU FICHIER NETTOYÉ
-            cleaned_filename = "data_paris_clean.csv"
-            cleaned_filepath = os.path.join(app.config['UPLOAD_FOLDER'], cleaned_filename)
-            df_clean.to_csv(cleaned_filepath, index=False) # Sauvegarde sans les index
-            
-            joblib.dump(scaler, 'models/scaler.joblib')
-            # PHASE 3 : Sélection des Top 15 Features
-            top_features, df_importance, rf_model, X_train, X_test, y_train, y_test = selection_features(df_clean)
-            joblib.dump(top_features, 'models/top_features.joblib')
-
-            
-
-            # On lance la Phase 4 avec Cross-Validation
-            df_comparatif = entrainer_et_comparer_cv(df_clean[top_features], df_clean['prix'])
-
-            # On l'envoie au template
-            models_html = df_comparatif.to_html(classes='table table-striped table-hover', index=False)
-            
-            result_opti = optimiser_modele(X_train[top_features], y_train, X_test[top_features], y_test)
-            joblib.dump(result_opti['modele_final'], 'models/modele_paris_final.joblib')
-    
-            stats, hist, box, corr_img, corr_txt, miss, outliers, anomalies, nb, = analyser_donnees(df_clean)
+        # 2. Chargement et Feature Engineering
+        df_raw = pd.read_csv(filepath)
+        df_clean, scaler = feature_engineering(df_raw)
         
-            # Transmission au template dashboard.html
-            return render_template('dashboard.html', 
+        # Sauvegarde du fichier nettoyé
+        cleaned_filename = "data_paris_clean.csv"
+        cleaned_filepath = os.path.join(app.config['UPLOAD_FOLDER'], cleaned_filename)
+        df_clean.to_csv(cleaned_filepath, index=False)
+        
+        joblib.dump(scaler, 'models/scaler.joblib')
+
+        # PHASE 3 : Sélection des Top 15 Features
+        top_features, df_importance, rf_model, X_train, X_test, y_train, y_test = selection_features(df_clean)
+        joblib.dump(top_features, 'models/top_features.joblib')
+
+        # PHASE 4 : Comparaison des modèles
+        df_comparatif = entrainer_et_comparer_cv(df_clean[top_features], df_clean['prix'])
+        models_html = df_comparatif.to_html(classes='table table-striped table-hover', index=False)
+        
+        # PHASE 5 : Optimisation
+        result_opti = optimiser_modele(X_train[top_features], y_train, X_test[top_features], y_test)
+        joblib.dump(result_opti['modele_final'], 'models/modele_paris_final.joblib')
+
+
+        stats, hist, box, corr_txt, miss, outliers, anomalies, nb = analyser_donnees(df_clean)
+    
+        # Transmission au template dashboard.html
+        return render_template('dashboard.html', 
                                 stats=stats, 
                                 hist_url=hist, 
                                 box_url=box, 
-                                corr_url=corr_img,
-                                corr_table=corr_txt,
+                                corr_txt=corr_txt,
                                 report_missing=miss,    
                                 outliers=outliers,      
                                 anomalies=anomalies,   

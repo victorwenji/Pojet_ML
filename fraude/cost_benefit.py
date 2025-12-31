@@ -7,14 +7,7 @@ from sklearn.metrics import confusion_matrix
 
 def analyze_cost_benefit(y_true, y_pred, y_prob, threshold=0.5, 
                          cost_fp=50, cost_fn=500, benefit_tp=500):
-    """
-    Analyse coût-bénéfice de la détection de fraude
     
-    Params:
-        cost_fp: Coût d'un faux positif (investigation inutile)
-        cost_fn: Coût d'un faux négatif (fraude non détectée)
-        benefit_tp: Bénéfice d'un vrai positif (fraude évitée)
-    """
     # Matrice de confusion
     cm = confusion_matrix(y_true, y_pred)
     tn, fp, fn, tp = cm.ravel()
@@ -65,9 +58,7 @@ def analyze_cost_benefit(y_true, y_pred, y_prob, threshold=0.5,
 
 def generate_cost_benefit_plots(thresholds, net_benefits, optimal_threshold,
                                 tp, fp, fn, tn, cost_fp, cost_fn, benefit_tp):
-    """
-    Génère les visualisations coût-bénéfice
-    """
+    
     os.makedirs("static/plots", exist_ok=True)
     
     # 1. Bénéfice net vs Seuil

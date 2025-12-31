@@ -12,10 +12,7 @@ from fraude.class_weight import train_rf_class_weight, evaluate_model as eval_cw
 from fraude.smote_model import train_smote, evaluate_model as eval_smote
 
 def compare_all_strategies(X_train, X_test, y_train, y_test):
-    """
-    Compare les 3 stratégies : Baseline, Class Weight, SMOTE
-    Retourne un DataFrame et génère des visualisations
-    """
+
     results = []
     
     print("🔹 Entraînement Baseline...")

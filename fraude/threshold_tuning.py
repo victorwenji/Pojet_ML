@@ -4,21 +4,7 @@ import numpy as np
 import os
 
 def threshold_tuning(y_true, y_prob, save_path="static/plots/f1_vs_threshold.png"):
-    """
-    Calcule F1 pour chaque seuil, trouve le meilleur seuil et sauvegarde le plot.
     
-    Args:
-        y_true: labels réels
-        y_prob: probabilités prédites
-        save_path: chemin où sauvegarder le plot
-    
-    Returns:
-        best_threshold: seuil correspondant au F1 maximal
-        precisions: array des précisions
-        recalls: array des rappels
-        f1_scores: array des F1
-        thresholds: array des seuils
-    """
     precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
     f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-8)
     

@@ -3,14 +3,6 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Nettoyage complet :
-    - Remplissage des valeurs manquantes
-    - Arrondi des floats
-    - Conversion en entiers
-    - Encodage des colonnes catégorielles
-    - Extraction année/mois depuis date_transaction
-    """
     df = df.copy()
     
     # Remplissage des valeurs manquantes
